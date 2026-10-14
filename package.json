@@ -8,6 +8,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "subtitle:live": "tsx scripts/live-subtitle-player.ts",
     "setup:env": "bash scripts/setup-env.sh"
   },
   "keywords": [
