@@ -7,6 +7,7 @@ import fs from 'fs';
 import { env, STORAGE_PATH } from './config/env.js';
 import { hardwareConfig } from './config/hardware.js';
 import { jobRoutes } from './routes/jobRoutes.js';
+import { hdCleanerRoutes } from './routes/hdCleanerRoutes.js';
 import { initVideoWorker } from './queue/videoWorker.js';
 import { checkRedisHealth, getSharedRedis } from './queue/connection.js';
 import { cleanExpiredOutputs } from './utils/fileCleaner.js';
@@ -57,6 +58,7 @@ async function main() {
 
   // Register API routes
   await app.register(jobRoutes);
+  await app.register(hdCleanerRoutes);
 
   // Check Redis connectivity before initializing queue worker
   const isRedisUp = await checkRedisHealth();

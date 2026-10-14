@@ -9,6 +9,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "subtitle:live": "tsx scripts/live-subtitle-player.ts",
+    "clean:hd": "tsx scripts/clean-hd.ts",
     "setup:env": "bash scripts/setup-env.sh"
   },
   "keywords": [

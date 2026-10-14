@@ -59,8 +59,24 @@
     </div>
   </header>
 
-  <!-- Main Container -->
-  <main class="studio-layout">
+  <!-- Studio Navigation Bar -->
+  <nav class="studio-nav-bar">
+    <div class="nav-tabs-container">
+      <button class="nav-tab-btn active" id="tab-btn-subtitles">
+        <span class="tab-icon">🔥</span>
+        <span class="tab-title">Viral Subtitle Studio</span>
+        <span class="tab-badge">Whisper.cpp</span>
+      </button>
+      <button class="nav-tab-btn" id="tab-btn-cleaner">
+        <span class="tab-icon">🛡️</span>
+        <span class="tab-title">HD Booster & Meta Scrubber</span>
+        <span class="tab-badge badge-hd">Zero Compression</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main Container: Subtitle Studio (Original) -->
+  <main class="studio-layout" id="view-subtitles">
     <!-- Left Column: Ingestion & Subtitle Styling -->
     <section class="studio-panel input-panel">
       <div class="panel-header">
@@ -298,6 +314,318 @@
     </section>
   </main>
 
+  <!-- Main Container: HD Cleaner & Metadata Scrubber (Standalone Module) -->
+  <main class="studio-layout hidden" id="view-cleaner">
+    <!-- Left Column: Ingestion, Diagnostics & Preset Tuning -->
+    <section class="studio-panel input-panel">
+      <div class="panel-header">
+        <div class="panel-icon">1</div>
+        <div>
+          <h2>HD Conditioning & Privacy Scrubber</h2>
+          <p>Strip tracking metadata and prevent platform compression / FPS drop</p>
+        </div>
+      </div>
+
+      <form id="cleaner-form" class="studio-form">
+        <!-- Upload Dropzone -->
+        <div class="dropzone" id="cleaner-dropzone">
+          <input type="file" id="cleaner-file-input" accept="video/mp4,video/quicktime,video/x-matroska,video/webm" hidden>
+          <div class="dropzone-content" id="cleaner-dropzone-prompt">
+            <div class="upload-icon-circle">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              </svg>
+            </div>
+            <div class="dropzone-text">
+              <strong>Select video for HD mastering</strong> or drag & drop
+            </div>
+            <div class="dropzone-hints">
+              MP4, MOV, MKV, or WEBM • Sanitizes EXIF, GPS & Editor Tags
+            </div>
+          </div>
+
+          <!-- Video Selected Card -->
+          <div class="selected-video-card hidden" id="cleaner-selected-card">
+            <video id="cleaner-video-preview" controls muted></video>
+            <div class="file-info-bar">
+              <div class="file-name" id="cleaner-file-name">filename.mp4</div>
+              <div class="file-meta" id="cleaner-file-meta">0.0 MB</div>
+              <button type="button" class="btn-icon-close" id="cleaner-btn-remove" title="Remove file">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Privacy & Format Inspector Card (Shows upon selection) -->
+        <div class="inspect-card hidden" id="cleaner-inspect-card">
+          <div class="inspect-header">
+            <span class="inspect-title">🔍 Source File Diagnostics</span>
+            <span class="inspect-subtitle">Pre-processing scan</span>
+          </div>
+          <div class="inspect-grid">
+            <div class="inspect-item">
+              <span class="inspect-label">Framerate Mode:</span>
+              <span id="inspect-vfr-tag" class="inspect-value">Scanning...</span>
+            </div>
+            <div class="inspect-item">
+              <span class="inspect-label">GPS Tracking:</span>
+              <span id="inspect-gps-tag" class="inspect-value">Scanning...</span>
+            </div>
+            <div class="inspect-item">
+              <span class="inspect-label">Camera Device:</span>
+              <span id="inspect-camera-tag" class="inspect-value">Scanning...</span>
+            </div>
+            <div class="inspect-item">
+              <span class="inspect-label">Metadata Atoms:</span>
+              <span id="inspect-tags-tag" class="inspect-value">Scanning...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Platform Preset Selection -->
+        <div class="form-group">
+          <label>
+            <span>Target Platform Preset</span>
+            <span class="value-bubble" style="color: var(--accent-cyan)">Optimized Sweet Spot</span>
+          </label>
+          <div class="cleaner-presets-grid">
+            <button type="button" class="cleaner-preset-btn active" data-preset="reels">
+              <div class="preset-name">📸 Instagram Reels HD</div>
+              <div class="preset-desc">60 FPS CFR • -14 LUFS • Rec.709 • 18M VBV</div>
+            </button>
+            <button type="button" class="cleaner-preset-btn" data-preset="tiktok">
+              <div class="preset-name">🎵 TikTok HD Pro</div>
+              <div class="preset-desc">60 FPS CFR • -16 LUFS • Rec.709 • 18M VBV</div>
+            </button>
+            <button type="button" class="cleaner-preset-btn" data-preset="universal">
+              <div class="preset-name">🌐 Universal 30 FPS</div>
+              <div class="preset-desc">30 FPS CFR • Safe Bitrate • Broad Compatibility</div>
+            </button>
+            <button type="button" class="cleaner-preset-btn" data-preset="metadata_only">
+              <div class="preset-name">🧹 Metadata Strip Only</div>
+              <div class="preset-desc">Instant 0s Copy • Wipe EXIF, GPS & Tags</div>
+            </button>
+          </div>
+          <input type="hidden" id="cleaner-platform-input" value="reels">
+        </div>
+
+        <!-- Advanced Video Conditioning Settings -->
+        <div class="settings-grid">
+          <div class="form-group">
+            <label for="cleaner-fps-select">
+              <span>Target Framerate (Strict CFR)</span>
+            </label>
+            <div class="select-wrapper">
+              <select id="cleaner-fps-select">
+                <option value="60" selected>60 FPS (Ultra Smooth - Zero Stutter)</option>
+                <option value="30">30 FPS (Standard Cinematic)</option>
+                <option value="source">Source Native Frame Rate</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="cleaner-resolution-select">
+              <span>Resolution Scaling</span>
+            </label>
+            <div class="select-wrapper">
+              <select id="cleaner-resolution-select">
+                <option value="1080x1920" selected>1080x1920 (9:16 Vertical Standard)</option>
+                <option value="preserve_aspect">Preserve Original Aspect Ratio (Lanczos)</option>
+                <option value="original">Unchanged Original Dimensions</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Secret Sauce Toggles -->
+        <div class="toggles-list">
+          <label class="custom-checkbox-row">
+            <input type="checkbox" id="cleaner-dither-checkbox" checked>
+            <div class="checkbox-info">
+              <strong>Temporal Micro-Noise Dithering</strong>
+              <span>Tricks platform lossy compression to bypass deadzone color banding.</span>
+            </div>
+          </label>
+
+          <label class="custom-checkbox-row">
+            <input type="checkbox" id="cleaner-unsharp-checkbox" checked>
+            <div class="checkbox-info">
+              <strong>Smart Mobile Unsharp Matrix (3:3:0.5)</strong>
+              <span>Enhances edge clarity on AMOLED and Retina smartphone displays.</span>
+            </div>
+          </label>
+
+          <label class="custom-checkbox-row">
+            <input type="checkbox" id="cleaner-audionorm-checkbox" checked>
+            <div class="checkbox-info">
+              <strong>EBU R128 Audio Normalization</strong>
+              <span>Prevents harsh platform audio limiters and distortion peaks.</span>
+            </div>
+          </label>
+
+          <label class="custom-checkbox-row">
+            <input type="checkbox" id="cleaner-forcecpu-checkbox">
+            <div class="checkbox-info">
+              <strong>Force CPU libx264 Encoding</strong>
+              <span>Bypasses Intel QSV for software mastering quality.</span>
+            </div>
+          </label>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn-primary" id="cleaner-btn-submit" disabled>
+          <span class="btn-text">SANITIZE & MASTER FOR HD</span>
+          <span class="btn-spinner hidden" id="cleaner-submit-spinner"></span>
+        </button>
+      </form>
+    </section>
+
+    <!-- Right Column: Optimization Stepper, Before/After & Output Player -->
+    <section class="studio-panel output-panel">
+      <div class="panel-header">
+        <div class="panel-icon">2</div>
+        <div>
+          <h2>Conditioning & Verification Engine</h2>
+          <p>Real-time stream mastering, metadata scrubbing, and quality verification</p>
+        </div>
+      </div>
+
+      <!-- Live Execution Progress Card -->
+      <div class="monitor-card" id="cleaner-monitor-card">
+        <div class="progress-section">
+          <div class="progress-meta">
+            <span class="progress-status-title" id="cleaner-stage-title">Awaiting Video Submission</span>
+            <span class="progress-percent-val" id="cleaner-progress-percent">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-bar-fill" id="cleaner-progress-bar-fill" style="width: 0%"></div>
+          </div>
+          <div class="progress-message" id="cleaner-progress-sub-message">Select a video file to begin anti-compression conditioning.</div>
+        </div>
+
+        <div class="pipeline-stepper" id="cleaner-pipeline-stepper">
+          <div class="step-item" id="clean-step-scan">
+            <div class="step-icon">1</div>
+            <div class="step-content">
+              <strong>Privacy & Metadata Audit</strong>
+              <small>Scans EXIF, GPS, camera tags & format</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+
+          <div class="step-item" id="clean-step-cfr">
+            <div class="step-icon">2</div>
+            <div class="step-content">
+              <strong>Strict CFR & 2s GOP Structuring</strong>
+              <small>Eliminates variable framerate stutter</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+
+          <div class="step-item" id="clean-step-color">
+            <div class="step-icon">3</div>
+            <div class="step-content">
+              <strong>Rec.709 Color Tagging & Micro-Dither</strong>
+              <small>Prevents color washout and banding</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+
+          <div class="step-item" id="clean-step-audio">
+            <div class="step-icon">4</div>
+            <div class="step-content">
+              <strong>EBU R128 Audio Loudnorm</strong>
+              <small>Calibrated to Reels/TikTok audio limits</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+
+          <div class="step-item" id="clean-step-faststart">
+            <div class="step-icon">5</div>
+            <div class="step-content">
+              <strong>Bitexact Scrub & FastStart Web Header</strong>
+              <small>100% anonymized container with instant start</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Before vs After Verification Card -->
+      <div class="comparison-card hidden" id="cleaner-comparison-card">
+        <div class="comparison-title-row">
+          <h3>🛡️ Privacy & Quality Audit Verification</h3>
+          <span class="badge-pill success">Verified Clean</span>
+        </div>
+        <div class="comparison-table">
+          <div class="comparison-row header">
+            <span>Metric</span>
+            <span>Before Optimization</span>
+            <span>After Optimization</span>
+          </div>
+          <div class="comparison-row">
+            <span class="metric-name">Metadata Atoms</span>
+            <span id="comp-meta-before" class="danger-val">--</span>
+            <span id="comp-meta-after" class="success-val">--</span>
+          </div>
+          <div class="comparison-row">
+            <span class="metric-name">GPS / Privacy</span>
+            <span id="comp-gps-before" class="danger-val">--</span>
+            <span id="comp-gps-after" class="success-val">--</span>
+          </div>
+          <div class="comparison-row">
+            <span class="metric-name">Frame Rate</span>
+            <span id="comp-fps-before" class="warn-val">--</span>
+            <span id="comp-fps-after" class="success-val">--</span>
+          </div>
+          <div class="comparison-row">
+            <span class="metric-name">Color Profile</span>
+            <span id="comp-color-before">--</span>
+            <span id="comp-color-after" class="success-val">--</span>
+          </div>
+          <div class="comparison-row">
+            <span class="metric-name">File Size</span>
+            <span id="comp-size-before">--</span>
+            <span id="comp-size-after">--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Final Output Player -->
+      <div class="final-output-card hidden" id="cleaner-output-section">
+        <div class="output-preview-wrapper">
+          <video id="cleaner-final-player" controls playsinline></video>
+        </div>
+        <div class="output-actions">
+          <div class="output-stats">
+            <span class="stat-tag" id="cleaner-stat-render-time">Render: --</span>
+            <span class="stat-tag" id="cleaner-stat-encoder">Encoder: --</span>
+          </div>
+          <a id="cleaner-btn-download" class="btn-download" href="#" download>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>DOWNLOAD SANITIZED HD VIDEO</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Recent Cleaner Jobs History -->
+      <div class="recent-jobs-section">
+        <div class="section-title-row">
+          <h3>Recent HD Optimization Tasks</h3>
+          <button type="button" class="btn-text-sm" id="cleaner-btn-refresh-history">Refresh</button>
+        </div>
+        <div class="history-list" id="cleaner-history-list">
+          <div class="history-empty">No recent HD optimization jobs yet.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
   <script src="/app.js"></script>
+  <script src="/hd-cleaner.js"></script>
 </body>
 </html>

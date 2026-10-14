@@ -64,14 +64,18 @@ function detectQsvSupport(ffmpegBinary: string): boolean {
     });
 
     const hasEncoder = output.includes('h264_qsv');
+    if (!hasEncoder) return false;
 
-    // On Linux, verify DRM / render node accessibility for hardware device
-    if (hasEncoder && process.platform === 'linux') {
-      const driExists = fs.existsSync('/dev/dri/renderD128') || fs.existsSync('/dev/dri/card0');
-      return driExists;
+    // Perform an instant runtime probe to ensure device driver actually initializes
+    try {
+      execSync(`"${ffmpegBinary}" -v quiet -f lavfi -i nullsrc=s=64x64:d=0.05 -c:v h264_qsv -f null -`, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 2000
+      });
+      return true;
+    } catch {
+      return false;
     }
-
-    return hasEncoder;
   } catch {
     return false;
   }
