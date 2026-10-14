@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ViralReels Studio | Local 9:16 Video Pipeline</title>
+  <meta name="description" content="Autonomous local video pipeline for Shorts, Reels, and TikTok with Whisper.cpp transcription, dynamic karaoke ASS subtitles, and Intel QuickSync acceleration.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&family=Montserrat:wght@800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- Ambient background glow effects -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="ambient-glow glow-3"></div>
+
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <div class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 4.5V19.5C4 20.3284 4.67157 21 5.5 21H18.5C19.3284 21 20 20.3284 20 19.5V4.5C20 3.67157 19.3284 3 18.5 3H5.5C4.67157 3 4 3.67157 4 4.5Z" stroke="url(#paint0_linear)" stroke-width="2"/>
+            <path d="M10 8.5L16 12L10 15.5V8.5Z" fill="url(#paint1_linear)"/>
+            <defs>
+              <linearGradient id="paint0_linear" x1="4" y1="3" x2="20" y2="21" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#FFE600"/>
+                <stop offset="1" stop-color="#FF007A"/>
+              </linearGradient>
+              <linearGradient id="paint1_linear" x1="10" y1="8.5" x2="16" y2="15.5" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#FFE600"/>
+                <stop offset="1" stop-color="#00F0FF"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">VIRAL<span class="gradient-text">REELS</span></span>
+          <span class="brand-subtitle">STUDIO PRO</span>
+        </div>
+        <div class="badge-zero-api">
+          <span class="pulse-dot"></span>
+          0% EXTERNAL API • 100% LOCAL
+        </div>
+      </div>
+
+      <div class="system-status-pills" id="system-status-container">
+        <div class="pill" id="qsv-pill" title="Intel QuickSync Video Acceleration Status">
+          <span class="pill-dot" id="qsv-dot"></span>
+          <span id="qsv-text">Checking QSV...</span>
+        </div>
+        <div class="pill" id="redis-pill" title="BullMQ Task Queue Status">
+          <span class="pill-dot active"></span>
+          <span>BullMQ Engine</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="studio-layout">
+    <!-- Left Column: Ingestion & Subtitle Styling -->
+    <section class="studio-panel input-panel">
+      <div class="panel-header">
+        <div class="panel-icon">1</div>
+        <div>
+          <h2>Video Ingestion & Subtitle Styling</h2>
+          <p>Drop source footage, customize high-retention karaoke presets</p>
+        </div>
+      </div>
+
+      <form id="render-form" class="studio-form">
+        <!-- Upload Dropzone -->
+        <div class="dropzone" id="dropzone">
+          <input type="file" id="video-file-input" name="file" accept="video/mp4,video/quicktime,video/x-matroska" hidden>
+          <div class="dropzone-content" id="dropzone-prompt">
+            <div class="upload-icon-circle">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+            </div>
+            <div class="dropzone-text">
+              <strong>Click to upload</strong> or drag & drop video
+            </div>
+            <div class="dropzone-hints">
+              MP4, MOV, or MKV • Max 180s • Up to 500 MB
+            </div>
+          </div>
+
+          <!-- Video Selected Card -->
+          <div class="selected-video-card hidden" id="selected-video-card">
+            <video id="input-video-preview" controls muted></video>
+            <div class="file-info-bar">
+              <div class="file-name" id="file-name-label">filename.mp4</div>
+              <div class="file-meta" id="file-meta-label">0.0 MB</div>
+              <button type="button" class="btn-icon-close" id="btn-remove-file" title="Remove file">✕</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Customization Settings -->
+        <div class="settings-grid">
+          <!-- Language Selector -->
+          <div class="form-group">
+            <label for="language-select">
+              <span>Speech Language (Whisper)</span>
+            </label>
+            <div class="select-wrapper">
+              <select id="language-select" name="language">
+                <option value="id" selected>Bahasa Indonesia (Default)</option>
+                <option value="en">English</option>
+                <option value="auto">Auto-detect Speech</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Words Per Chunk -->
+          <div class="form-group">
+            <label for="chunk-size-slider">
+              <span>Words Per Subtitle Chunk</span>
+              <span class="value-bubble" id="chunk-size-val">3 words</span>
+            </label>
+            <input type="range" id="chunk-size-slider" name="maxWordsPerChunk" min="1" max="5" value="3" step="1">
+            <div class="range-labels">
+              <span>1 (ultra fast)</span>
+              <span>3 (reels standard)</span>
+              <span>5 (extended)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Karaoke Highlight Color Picker -->
+        <div class="form-group">
+          <label>
+            <span>Karaoke Active Word Highlight</span>
+            <span class="color-preview-badge" id="color-hex-badge">#FFE600</span>
+          </label>
+          <div class="color-palette" id="color-palette">
+            <button type="button" class="color-btn active" data-color="#FFE600" style="--c: #FFE600" title="Neon Yellow"></button>
+            <button type="button" class="color-btn" data-color="#00F0FF" style="--c: #00F0FF" title="Electric Cyan"></button>
+            <button type="button" class="color-btn" data-color="#00FF66" style="--c: #00FF66" title="Neon Green"></button>
+            <button type="button" class="color-btn" data-color="#FF6B00" style="--c: #FF6B00" title="Sunset Orange"></button>
+            <button type="button" class="color-btn" data-color="#FF007A" style="--c: #FF007A" title="Hot Pink"></button>
+            <button type="button" class="color-btn" data-color="#FFFFFF" style="--c: #FFFFFF" title="Pure White"></button>
+            <label class="custom-color-picker-btn" title="Pick Custom Color">
+              <input type="color" id="custom-color-input" value="#FFE600">
+              <span>🎨</span>
+            </label>
+          </div>
+          <input type="hidden" id="highlight-color-input" name="highlightColor" value="#FFE600">
+        </div>
+
+        <!-- Safe Zone Margin -->
+        <div class="form-group">
+          <label for="marginv-input">
+            <span>Meta / Reels Bottom Safe-Zone Margin</span>
+            <span class="value-bubble" id="marginv-val">480 px</span>
+          </label>
+          <input type="range" id="marginv-input" name="marginV" min="200" max="650" value="480" step="10">
+          <p class="field-hint">Ensures subtitles are positioned above Meta/TikTok captions and UI buttons.</p>
+        </div>
+
+        <!-- Action Button -->
+        <button type="submit" class="btn-primary" id="btn-submit-job" disabled>
+          <span class="btn-text">START AUTOMATED PIPELINE</span>
+          <span class="btn-spinner hidden" id="submit-spinner"></span>
+        </button>
+      </form>
+    </section>
+
+    <!-- Right Column: Live Pipeline Monitor & Output Player -->
+    <section class="studio-panel output-panel">
+      <div class="panel-header">
+        <div class="panel-icon">2</div>
+        <div>
+          <h2>Pipeline Execution & Output Monitor</h2>
+          <p>Real-time queue tracking, Intel QSV encoding, & 9:16 export</p>
+        </div>
+      </div>
+
+      <!-- Execution Progress Card -->
+      <div class="monitor-card" id="monitor-card">
+        <!-- Progress Bar and percentage -->
+        <div class="progress-section">
+          <div class="progress-meta">
+            <span class="progress-status-title" id="current-stage-title">Awaiting Media Submission</span>
+            <span class="progress-percent-val" id="progress-percent">0%</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-bar-fill" id="progress-bar-fill" style="width: 0%"></div>
+          </div>
+          <div class="progress-message" id="progress-sub-message">Select a video file to begin automated processing.</div>
+        </div>
+
+        <!-- Pipeline Stages List -->
+        <div class="pipeline-stepper" id="pipeline-stepper">
+          <div class="step-item" id="step-queued">
+            <div class="step-icon">1</div>
+            <div class="step-content">
+              <strong>Queued & Validated</strong>
+              <small>File integrity & format check</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+
+          <div class="step-item" id="step-extracting">
+            <div class="step-icon">2</div>
+            <div class="step-content">
+              <strong>Audio Extraction (FFmpeg)</strong>
+              <small>16kHz Mono 16-bit PCM WAV</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+
+          <div class="step-item" id="step-transcribing">
+            <div class="step-icon">3</div>
+            <div class="step-content">
+              <strong>Whisper.cpp Local ASR</strong>
+              <small>Word-level timestamps & tokens</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+
+          <div class="step-item" id="step-subtitles">
+            <div class="step-icon">4</div>
+            <div class="step-content">
+              <strong>ASS Subtitle Generator</strong>
+              <small>3-word chunking & karaoke highlight</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+
+          <div class="step-item" id="step-compositing">
+            <div class="step-icon">5</div>
+            <div class="step-content">
+              <strong>Intel QSV Mix & Loudnorm</strong>
+              <small>9:16 Auto-crop & -14 LUFS normalizer</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+
+          <div class="step-item" id="step-completed">
+            <div class="step-icon">✓</div>
+            <div class="step-content">
+              <strong>Render Completed</strong>
+              <small>Master MP4 saved to storage/outputs/</small>
+            </div>
+            <div class="step-status">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Output Result Preview -->
+      <div class="output-preview-card hidden" id="output-preview-card">
+        <div class="output-video-container">
+          <video id="final-video-player" controls playsinline></video>
+        </div>
+        <div class="output-actions">
+          <div class="output-stats">
+            <span class="stat-tag" id="stat-render-time">Render: --</span>
+            <span class="stat-tag" id="stat-encoder">Encoder: --</span>
+          </div>
+          <a id="btn-download-video" class="btn-download" href="#" download>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>DOWNLOAD VIRAL 9:16 VIDEO</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Recent Jobs Drawer -->
+      <div class="recent-jobs-section">
+        <div class="section-title-row">
+          <h3>Recent Pipeline Renders</h3>
+          <button type="button" class="btn-text-sm" id="btn-refresh-history">Refresh</button>
+        </div>
+        <div class="history-list" id="history-list">
+          <div class="history-empty">No recent processing jobs yet.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

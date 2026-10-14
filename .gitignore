@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.env
+
+# Storage directories
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/temp/*
+!storage/temp/.gitkeep
+storage/outputs/*
+!storage/outputs/.gitkeep
+
+# Models & Binaries
+models/*.bin
+!models/.gitkeep
+bin/*
+!bin/.gitkeep
+
+# Logs and scratch
+*.log
+scratch/
+.DS_Store
