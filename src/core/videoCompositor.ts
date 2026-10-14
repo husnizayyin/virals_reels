@@ -67,7 +67,7 @@ function executeFfmpegComposite(
     const ffmpegBin = hardwareConfig.ffmpegPath;
     const escapedAss = escapeFilterPath(assFilePath);
 
-    const videoFilter = `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,ass='${escapedAss}'`;
+    const videoFilter = `scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,ass='${escapedAss}',format=yuv420p`;
     const audioFilter = 'loudnorm=I=-14:TP=-1.0:LRA=11';
 
     const args: string[] = ['-y'];
@@ -80,25 +80,45 @@ function executeFfmpegComposite(
     args.push('-vf', videoFilter);
     args.push('-af', audioFilter);
 
+    // Social Media Ultra-Quality & Zero FPS Drop Tuning:
+    // 1. Force Constant Frame Rate (CFR) at 30fps to avoid mobile VFR stutter
+    // 2. Strict 2-second GOP (keyframe every 60 frames) per Meta/TikTok guidelines
+    // 3. High Profile Level 4.2 with yuv420p and Rec.709 color tagging
+    args.push(
+      '-r', '30',
+      '-fps_mode', 'cfr',
+      '-pix_fmt', 'yuv420p',
+      '-colorspace', 'bt709',
+      '-color_primaries', 'bt709',
+      '-color_trc', 'bt709',
+      '-g', '60',
+      '-keyint_min', '30',
+      '-profile:v', 'high',
+      '-level', '4.2'
+    );
+
     if (useQsv) {
       args.push(
         '-c:v', 'h264_qsv',
-        '-preset', 'veryfast',
-        '-b:v', '6500k',
-        '-maxrate', '8500k',
-        '-bufsize', '13000k'
+        '-preset', 'medium',
+        '-b:v', '8500k',
+        '-maxrate', '12000k',
+        '-bufsize', '24000k'
       );
     } else {
       args.push(
         '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '22'
+        '-preset', 'medium',
+        '-crf', '18',              // Visually lossless mastering quality
+        '-maxrate', '12000k',
+        '-bufsize', '24000k'
       );
     }
 
     args.push(
       '-c:a', 'aac',
       '-b:a', '192k',
+      '-ar', '48000',             // Studio standard 48kHz audio
       '-movflags', '+faststart',
       outputVideoPath
     );

@@ -28,7 +28,7 @@ const envSchema = z.object({
 
   // Storage and file limits
   STORAGE_DIR: z.string().default('./storage'),
-  MAX_FILE_SIZE_MB: z.coerce.number().default(500),
+  MAX_FILE_SIZE_MB: z.coerce.number().default(4096),
   MAX_VIDEO_DURATION_SEC: z.coerce.number().default(180),
   TEMP_CLEANUP_HOURS: z.coerce.number().default(24)
 });

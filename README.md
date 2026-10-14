@@ -112,7 +112,7 @@ Open your browser and navigate to:
 - **Endpoint**: `POST /api/v1/jobs`
 - **Content-Type**: `multipart/form-data`
 - **Parameters**:
-  - `file`: Video file (`.mp4`, `.mov`, `.mkv`), max 500 MB, max 180s.
+  - `file`: Video file (`.mp4`, `.mov`, `.mkv`), max 4 GB, max 180s.
   - `language`: `id` (default: Bahasa Indonesia), `en`, or `auto`.
   - `highlightColor`: Hex string (e.g., `#FFE600`, `#00F0FF`, `#FF007A`).
   - `marginV`: Safe vertical margin in pixels (default: `480`).

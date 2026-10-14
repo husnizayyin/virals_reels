@@ -35,8 +35,14 @@ export async function validateAndInspectMedia(filePath: string): Promise<MediaMe
   const stat = await fs.promises.stat(filePath);
   const maxSizeBytes = env.MAX_FILE_SIZE_MB * 1024 * 1024;
   if (stat.size > maxSizeBytes) {
+    const sizeStr = stat.size >= 1024 * 1024 * 1024
+      ? `${(stat.size / 1024 / 1024 / 1024).toFixed(2)} GB`
+      : `${(stat.size / 1024 / 1024).toFixed(1)} MB`;
+    const maxStr = env.MAX_FILE_SIZE_MB >= 1024
+      ? `${(env.MAX_FILE_SIZE_MB / 1024).toFixed(0)} GB`
+      : `${env.MAX_FILE_SIZE_MB} MB`;
     throw new ValidationError(
-      `File size (${(stat.size / 1024 / 1024).toFixed(1)} MB) exceeds limit of ${env.MAX_FILE_SIZE_MB} MB`
+      `File size (${sizeStr}) exceeds maximum allowed limit of ${maxStr}`
     );
   }
 

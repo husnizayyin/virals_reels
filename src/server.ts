@@ -12,6 +12,7 @@ import { checkRedisHealth, getSharedRedis } from './queue/connection.js';
 import { cleanExpiredOutputs } from './utils/fileCleaner.js';
 
 const app = fastify({
+  bodyLimit: env.MAX_FILE_SIZE_MB * 1024 * 1024,
   logger: {
     level: env.NODE_ENV === 'production' ? 'info' : 'debug',
     transport:
