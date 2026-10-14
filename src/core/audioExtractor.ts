@@ -6,14 +6,56 @@ import { hardwareConfig } from '../config/hardware.js';
 
 const execFileAsync = promisify(execFile);
 
+export interface SilenceInterval {
+  startMs: number;
+  endMs: number;
+}
+
 export interface AudioExtractionResult {
   wavPath: string;
   duration?: number;
+  silenceIntervals: SilenceInterval[];
 }
 
 /**
- * Extracts a 16kHz mono 16-bit PCM WAV audio file from an input video.
- * Specification: ffmpeg -y -i "{input_path}" -vn -ar 16000 -ac 1 -c:a pcm_s16le "{output_wav_path}"
+ * Detects silence intervals using FFmpeg silencedetect filter (noise < -32dB for >= 250ms).
+ */
+export async function detectSilenceIntervals(wavPath: string): Promise<SilenceInterval[]> {
+  const ffmpegBin = hardwareConfig.ffmpegPath;
+  const args = [
+    '-i', wavPath,
+    '-af', 'silencedetect=noise=-32dB:d=0.25',
+    '-f', 'null',
+    '-'
+  ];
+
+  try {
+    const { stderr } = await execFileAsync(ffmpegBin, args, { maxBuffer: 10 * 1024 * 1024 });
+    const intervals: SilenceInterval[] = [];
+    let currentStart: number | null = null;
+    const lines = stderr.split('\n');
+
+    for (const line of lines) {
+      const startMatch = line.match(/silence_start:\s*([\d.]+)/);
+      if (startMatch) {
+        currentStart = parseFloat(startMatch[1]) * 1000;
+      }
+      const endMatch = line.match(/silence_end:\s*([\d.]+)/);
+      if (endMatch && currentStart !== null) {
+        const end = parseFloat(endMatch[1]) * 1000;
+        intervals.push({ startMs: Math.round(currentStart), endMs: Math.round(end) });
+        currentStart = null;
+      }
+    }
+    return intervals;
+  } catch (err) {
+    console.warn('[AudioExtractor] Silence detection warning:', err);
+    return [];
+  }
+}
+
+/**
+ * Extracts a 16kHz mono 16-bit PCM WAV audio file from an input video and detects silence ranges.
  */
 export async function extractAudioForWhisper(
   inputVideoPath: string,
@@ -48,7 +90,12 @@ export async function extractAudioForWhisper(
       throw new Error(`Extracted audio file is empty (0 bytes)`);
     }
 
-    return { wavPath: outputWavPath };
+    const silenceIntervals = await detectSilenceIntervals(outputWavPath);
+
+    return {
+      wavPath: outputWavPath,
+      silenceIntervals
+    };
   } catch (err: any) {
     throw new Error(`Audio extraction failed: ${err.message}`);
   }

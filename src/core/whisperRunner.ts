@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { hardwareConfig } from '../config/hardware.js';
 import { env } from '../config/env.js';
+import { SilenceInterval } from './audioExtractor.js';
 
 export interface WordToken {
   word: string;
@@ -20,10 +21,13 @@ export interface WhisperOptions {
   language?: string;
   threads?: number;
   modelPath?: string;
+  prompt?: string;
+  silenceIntervals?: SilenceInterval[];
 }
 
 /**
- * Runs whisper.cpp CLI with non-blocking stream handling to avoid pipe buffer overflows.
+ * Runs whisper.cpp CLI with non-blocking stream handling, phrase-level segmentation (-ml 24),
+ * prompt conditioning, and silence alignment to prevent halucinations during speech pauses.
  */
 export async function runWhisperTranscription(
   wavPath: string,
@@ -36,7 +40,7 @@ export async function runWhisperTranscription(
 
   if (!fs.existsSync(whisperCli)) {
     throw new Error(
-      `whisper-cli executable not found at ${whisperCli}. Run "npm run setup:env" or bash scripts/setup-env.sh to install it.`
+      `whisper-cli executable not found at ${whisperCli}. Run "npm run setup:env" to install it.`
     );
   }
 
@@ -53,12 +57,30 @@ export async function runWhisperTranscription(
   const args = [
     '-m', modelPath,
     '-f', wavPath,
-    '-oj',                    // output json
+    '-ojf',                   // Full JSON output with token-level timestamps!
     '-sow',                   // split on word rather than token
+    '-ml', '24',              // Compact segment length (avoids spanning speech pauses)
     '-of', outputPrefix,      // output base filename
     '-l', language,
-    '-t', threads.toString()
+    '-t', threads.toString(),
+    '-bs', '5',               // Beam size 5 for higher transcription accuracy
+    '-bo', '5',               // Best of 5 candidate evaluation
+    '-wt', '0.01',            // Word timestamp probability threshold
+    '-nth', '0.40',           // Aggressively suppress segments with high silence probability
+    '--suppress-nst'          // Suppress hallucinated non-speech tokens
   ];
+
+  // Prompt conditioning to dramatically improve technical terms and Indonesian spelling
+  if (options.prompt && options.prompt.trim()) {
+    args.push('--prompt', options.prompt.trim());
+  } else if (language === 'id') {
+    args.push(
+      '--prompt',
+      'Halo, di kesempatan ini saya membuat aplikasi clipper video Reels, Shorts, TikTok menggunakan Node.js, library FFmpeg, Python, C++ untuk memproses NLP. Bermanfaat bagi konten kreator, first project, aplikasi ini lebih cepat, terima kasih.'
+    );
+  } else if (language === 'en') {
+    args.push('--prompt', 'Clear speech transcription for viral Reels, Shorts, and TikTok subtitles.');
+  }
 
   return new Promise<TranscriptionOutput>((resolve, reject) => {
     const child = spawn(whisperCli, args);
@@ -66,12 +88,10 @@ export async function runWhisperTranscription(
     let stdoutBuffer = '';
     let stderrBuffer = '';
 
-    // Non-blocking consumption of stdout
     child.stdout.on('data', (chunk: Buffer) => {
       stdoutBuffer += chunk.toString();
     });
 
-    // Non-blocking consumption of stderr
     child.stderr.on('data', (chunk: Buffer) => {
       stderrBuffer += chunk.toString();
     });
@@ -98,14 +118,13 @@ export async function runWhisperTranscription(
         if (jsonPathToRead) {
           const rawContent = await fs.promises.readFile(jsonPathToRead, 'utf8');
           const parsed = JSON.parse(rawContent);
-          const result = parseWhisperJson(parsed);
+          const result = parseWhisperJson(parsed, options.silenceIntervals);
           return resolve(result);
         }
 
-        // If no JSON file, attempt to parse JSON from stdout
         try {
           const parsedFromStdout = JSON.parse(stdoutBuffer);
-          const result = parseWhisperJson(parsedFromStdout);
+          const result = parseWhisperJson(parsedFromStdout, options.silenceIntervals);
           return resolve(result);
         } catch {
           throw new Error('whisper-cli completed but did not produce a readable JSON output.');
@@ -119,9 +138,11 @@ export async function runWhisperTranscription(
 
 /**
  * Parses whisper.cpp JSON output into normalized TranscriptionOutput
+ * Correctly reconstructs full words and millisecond boundaries from BPE subword tokens,
+ * and filters out any tokens that lie entirely in detected silence intervals.
  */
-function parseWhisperJson(data: any): TranscriptionOutput {
-  const tokens: WordToken[] = [];
+function parseWhisperJson(data: any, silenceIntervals: SilenceInterval[] = []): TranscriptionOutput {
+  const rawWords: WordToken[] = [];
   let fullText = '';
 
   const transcription = data.transcription || data.segments || [];
@@ -131,51 +152,54 @@ function parseWhisperJson(data: any): TranscriptionOutput {
       fullText += (fullText ? ' ' : '') + seg.text.trim();
     }
 
-    // Check for tokens (when -osow is used, segments or tokens contain word level details)
     const segTokens = seg.tokens || [];
     if (segTokens.length > 0) {
+      let currentWord: WordToken | null = null;
+
       for (const tok of segTokens) {
-        const text = (tok.text || tok.word || '').trim();
-        if (!text || text === '[_BEG_]' || text === '[_TT_]' || text.startsWith('[_')) {
+        const rawText = tok.text || '';
+        if (!rawText || rawText.startsWith('[_') || rawText.startsWith('[')) {
           continue;
         }
 
-        // Offsets can be in milliseconds or timestamps
-        let startMs = 0;
-        let endMs = 0;
+        const isNewWord = rawText.startsWith(' ') || rawText.startsWith('\n') || !currentWord;
+        const cleanPiece = rawText.trim();
+        if (!cleanPiece) continue;
 
-        if (tok.offsets?.from !== undefined) {
-          startMs = tok.offsets.from;
-          endMs = tok.offsets.to;
-        } else if (tok.t0 !== undefined) {
-          // Centiseconds or milliseconds in some versions
-          startMs = typeof tok.t0 === 'number' ? tok.t0 * 10 : 0;
-          endMs = typeof tok.t1 === 'number' ? tok.t1 * 10 : startMs + 300;
-        } else if (tok.timestamps?.from) {
-          startMs = parseTimestampToMs(tok.timestamps.from);
-          endMs = parseTimestampToMs(tok.timestamps.to);
-        } else {
-          startMs = seg.offsets?.from || 0;
-          endMs = seg.offsets?.to || startMs + 300;
+        const startMs = tok.offsets?.from ?? (tok.timestamps?.from ? parseTimestampToMs(tok.timestamps.from) : 0);
+        const endMs = tok.offsets?.to ?? (tok.timestamps?.to ? parseTimestampToMs(tok.timestamps.to) : startMs + 200);
+
+        if (isNewWord) {
+          if (currentWord && currentWord.word.trim().length > 0) {
+            rawWords.push(currentWord);
+          }
+          currentWord = {
+            word: cleanPiece,
+            start: Math.round(startMs),
+            end: Math.round(endMs),
+            confidence: tok.p || 1
+          };
+        } else if (currentWord) {
+          currentWord.word += cleanPiece;
+          currentWord.end = Math.max(currentWord.end, Math.round(endMs));
+          if (tok.p) {
+            currentWord.confidence = Math.min(currentWord.confidence || 1, tok.p);
+          }
         }
+      }
 
-        tokens.push({
-          word: text,
-          start: Math.round(startMs),
-          end: Math.round(endMs),
-          confidence: tok.p || tok.confidence
-        });
+      if (currentWord && currentWord.word.trim().length > 0) {
+        rawWords.push(currentWord);
       }
     } else {
-      // Fallback: segment level words splitting if token timestamps are missing
       const segText = (seg.text || '').trim();
       const words = segText.split(/\s+/).filter(Boolean);
       const segStart = seg.offsets?.from ?? (seg.timestamps?.from ? parseTimestampToMs(seg.timestamps.from) : 0);
       const segEnd = seg.offsets?.to ?? (seg.timestamps?.to ? parseTimestampToMs(seg.timestamps.to) : segStart + 2000);
-      const durationPerWord = words.length > 0 ? (segEnd - segStart) / words.length : 500;
+      const durationPerWord = words.length > 0 ? (segEnd - segStart) / words.length : 350;
 
       words.forEach((word: string, index: number) => {
-        tokens.push({
+        rawWords.push({
           word,
           start: Math.round(segStart + index * durationPerWord),
           end: Math.round(segStart + (index + 1) * durationPerWord)
@@ -184,18 +208,46 @@ function parseWhisperJson(data: any): TranscriptionOutput {
     }
   }
 
-  // Deduplicate and sort by start time
-  tokens.sort((a, b) => a.start - b.start);
+  // Filter and align words against detected silence intervals
+  const finalTokens: WordToken[] = [];
+
+  for (const w of rawWords) {
+    let s = w.start;
+    let e = w.end;
+
+    // Check if word starts inside a silence interval (e.g. 0-4.8s initial silence)
+    for (const silence of silenceIntervals) {
+      if (s >= silence.startMs && s < silence.endMs) {
+        s = silence.endMs; // Shift speech start to where silence ends
+      }
+      if (e > silence.startMs && e <= silence.endMs) {
+        e = silence.startMs; // Cut speech end before silence starts
+      }
+    }
+
+    // If after clamping the word has zero/negative duration or falls entirely inside silence, drop it!
+    if (e - s < 60) {
+      // If duration is too short due to silence overlap, skip it (hallucination during silence)
+      continue;
+    }
+
+    finalTokens.push({
+      ...w,
+      start: s,
+      end: e
+    });
+  }
+
+  finalTokens.sort((a, b) => a.start - b.start);
 
   return {
-    text: fullText || tokens.map((t) => t.word).join(' '),
-    tokens
+    text: fullText || finalTokens.map((t) => t.word).join(' '),
+    tokens: finalTokens
   };
 }
 
 function parseTimestampToMs(ts: string): number {
   if (!ts) return 0;
-  // formats like "00:00:01,234" or "00:00:01.234"
   const clean = ts.replace(',', '.');
   const parts = clean.split(':');
   if (parts.length === 3) {

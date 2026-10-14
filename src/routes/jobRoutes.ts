@@ -42,6 +42,7 @@ export const jobRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) =>
     let highlightColor = '#FFE600';
     let marginV = 480;
     let maxWordsPerChunk = 3;
+    let prompt: string | undefined = undefined;
 
     try {
       for await (const part of parts) {
@@ -68,6 +69,8 @@ export const jobRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) =>
             language = part.value.trim().toLowerCase() || 'id';
           } else if (part.fieldname === 'highlightColor' && typeof part.value === 'string') {
             highlightColor = part.value.trim() || '#FFE600';
+          } else if (part.fieldname === 'prompt' && typeof part.value === 'string') {
+            prompt = part.value.trim() || undefined;
           } else if (part.fieldname === 'marginV') {
             const parsed = parseInt(String(part.value), 10);
             if (!isNaN(parsed)) marginV = parsed;
@@ -105,7 +108,8 @@ export const jobRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) =>
         highlightColor,
         marginV,
         maxWordsPerChunk,
-        duration: mediaMeta.duration
+        duration: mediaMeta.duration,
+        prompt
       };
 
       const queue = getVideoQueue();

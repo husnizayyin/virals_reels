@@ -41,14 +41,14 @@ export function initVideoWorker(): Worker<VideoJobData, JobResult> {
       try {
         console.log(`[Worker] Starting job ${jobId} for file: ${job.data.originalFileName}`);
 
-        // Step 1: EXTRACTING_AUDIO (15%)
+        // Step 1: EXTRACTING_AUDIO & SILENCE DETECTION (15%)
         setJobState(jobId, {
           status: 'EXTRACTING_AUDIO',
           progress: 15,
-          message: 'Extracting 16kHz mono audio from video...'
+          message: 'Extracting 16kHz audio & detecting voice activity boundaries...'
         });
         await job.updateProgress(15);
-        await extractAudioForWhisper(inputFilePath, tempWavPath);
+        const audioExtractResult = await extractAudioForWhisper(inputFilePath, tempWavPath);
 
         // Step 2: TRANSCRIBING (45%)
         setJobState(jobId, {
@@ -59,7 +59,9 @@ export function initVideoWorker(): Worker<VideoJobData, JobResult> {
         await job.updateProgress(45);
         const transcription = await runWhisperTranscription(tempWavPath, {
           language,
-          threads: hardwareConfig.whisperThreadCap
+          threads: hardwareConfig.whisperThreadCap,
+          prompt: job.data.prompt,
+          silenceIntervals: audioExtractResult.silenceIntervals
         });
         console.log(`[Worker] Job ${jobId} transcribed ${transcription.tokens.length} words.`);
 
@@ -67,14 +69,15 @@ export function initVideoWorker(): Worker<VideoJobData, JobResult> {
         setJobState(jobId, {
           status: 'GENERATING_SUBTITLES',
           progress: 60,
-          message: 'Compiling high-retention karaoke ASS subtitles...'
+          message: 'Compiling high-retention karaoke ASS subtitles with silence elimination...'
         });
         await job.updateProgress(60);
         await generateAssSubtitleFile(transcription.tokens, tempAssPath, {
           highlightColorHex: highlightColor,
           marginV: marginV ?? 480,
           maxWordsPerChunk: maxWordsPerChunk ?? 3,
-          allCaps: true
+          allCaps: true,
+          silenceIntervals: audioExtractResult.silenceIntervals
         });
 
         // Step 4: COMPOSITING (90%)

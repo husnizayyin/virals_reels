@@ -164,6 +164,16 @@
           <p class="field-hint">Ensures subtitles are positioned above Meta/TikTok captions and UI buttons.</p>
         </div>
 
+        <!-- Optional Vocabulary / Keywords helper -->
+        <div class="form-group">
+          <label for="prompt-input">
+            <span>Vocabulary / Brand Keywords (Optional)</span>
+            <span class="value-bubble" style="color: var(--accent-cyan)">AI Context</span>
+          </label>
+          <input type="text" id="prompt-input" name="prompt" placeholder="Contoh: Node.js, FFmpeg, Clipper, AI, nama brand..." style="width: 100%; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-primary); padding: 10px 14px; font-size: 0.85rem; font-family: var(--font-sans); outline: none;">
+          <p class="field-hint">Membantu Whisper mengenali istilah teknis atau nama khusus tanpa salah eja.</p>
+        </div>
+
         <!-- Action Button -->
         <button type="submit" class="btn-primary" id="btn-submit-job" disabled>
           <span class="btn-text">START AUTOMATED PIPELINE</span>

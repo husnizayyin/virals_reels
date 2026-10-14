@@ -21,6 +21,7 @@ export interface VideoJobData {
   marginV?: number;
   maxWordsPerChunk?: number;
   duration?: number;
+  prompt?: string;
 }
 
 export interface JobResult {

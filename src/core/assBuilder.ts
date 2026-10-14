@@ -3,6 +3,7 @@ import path from 'path';
 import { WordToken } from './whisperRunner.js';
 import { msToAssTime } from '../utils/timeFormatter.js';
 import { hexToAssColor, CANVAS, DEFAULT_PRESET } from '../config/presets.js';
+import { SilenceInterval } from './audioExtractor.js';
 
 export interface AssBuilderOptions {
   highlightColorHex?: string;
@@ -13,6 +14,7 @@ export interface AssBuilderOptions {
   marginV?: number;
   maxWordsPerChunk?: number;
   allCaps?: boolean;
+  silenceIntervals?: SilenceInterval[];
 }
 
 interface WordChunk {
@@ -23,6 +25,7 @@ interface WordChunk {
 
 /**
  * Builds an Advanced SubStation Alpha (.ass) file with dynamic karaoke word highlighting.
+ * Ensures subtitles strictly disappear during silence and mouth pauses.
  */
 export async function generateAssSubtitleFile(
   tokens: WordToken[],
@@ -42,13 +45,14 @@ export async function generateAssSubtitleFile(
   const marginV = options.marginV !== undefined ? options.marginV : DEFAULT_PRESET.marginV;
   const maxWords = options.maxWordsPerChunk || DEFAULT_PRESET.maxWordsPerChunk;
   const allCaps = options.allCaps !== false;
+  const silenceIntervals = options.silenceIntervals || [];
 
   const assHighlightColor = hexToAssColor(highlightHex);
   const assBaseColor = hexToAssColor(baseHex);
   const assOutlineColor = hexToAssColor(outlineHex);
 
-  // Group tokens into chunks of maxWords
-  const chunks = groupTokensIntoChunks(tokens, maxWords);
+  // Group tokens into chunks of maxWords respecting silence pauses
+  const chunks = groupTokensIntoChunks(tokens, maxWords, silenceIntervals);
 
   // Build ASS file content
   const header = `[Script Info]
@@ -72,15 +76,41 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   for (const chunk of chunks) {
     if (chunk.words.length === 0) continue;
 
-    // For each word in the chunk, emit an event for its active duration
     for (let i = 0; i < chunk.words.length; i++) {
       const activeWord = chunk.words[i];
-      const startMs = activeWord.start;
-      // Active duration ends either when next word starts or at current word end
+      let startMs = activeWord.start;
       const nextWord = chunk.words[i + 1];
-      const endMs = nextWord ? Math.min(nextWord.start, activeWord.end + 150) : activeWord.end;
 
-      if (endMs <= startMs) continue;
+      // Exact speech synchronization:
+      // Subtitle only displays while the speaker is actively talking.
+      // If there is silence between words (> 180ms) or when the chunk ends,
+      // the subtitle immediately disappears (never lingering into silence).
+      let endMs: number;
+      if (nextWord) {
+        if (nextWord.start - activeWord.end > 180) {
+          endMs = activeWord.end + 60;
+        } else {
+          endMs = nextWord.start;
+        }
+      } else {
+        // Last word of the phrase: cut off cleanly 60ms after voice ends
+        endMs = activeWord.end + 60;
+      }
+
+      // Silence clamp: if end extends into silence or start is in silence
+      for (const silence of silenceIntervals) {
+        if (startMs >= silence.startMs && startMs < silence.endMs) {
+          startMs = silence.endMs;
+        }
+        if (endMs > silence.startMs && endMs <= silence.endMs) {
+          endMs = silence.startMs;
+        }
+      }
+
+      if (endMs <= startMs + 40) {
+        // Fallback or skip if completely inside silence
+        continue;
+      }
 
       const startTime = msToAssTime(startMs);
       const endTime = msToAssTime(endMs);
@@ -90,7 +120,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         const text = allCaps ? w.word.toUpperCase() : w.word;
         if (index === i) {
           // Active word: apply highlight color + subtle scale boost for retention
-          return `{\\c${assHighlightColor}\\fscx105\\fscy105}${escapeAssText(text)}{\\r}`;
+          return `{\\c${assHighlightColor}\\fscx106\\fscy106}${escapeAssText(text)}{\\r}`;
         } else {
           // Base word: standard white color
           return `{\\c${assBaseColor}\\fscx100\\fscy100}${escapeAssText(text)}{\\r}`;
@@ -112,9 +142,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 /**
  * Groups consecutive words into chunks of maximum maxWordsPerChunk.
- * Breaks chunks early if there is a long pause (> 600ms) or sentence-ending punctuation.
+ * Breaks chunks early if there is a speech pause (> 300ms), sentence punctuation, or detected silence.
  */
-function groupTokensIntoChunks(tokens: WordToken[], maxWords: number): WordChunk[] {
+function groupTokensIntoChunks(
+  tokens: WordToken[],
+  maxWords: number,
+  silenceIntervals: SilenceInterval[] = []
+): WordChunk[] {
   const chunks: WordChunk[] = [];
   let currentChunkWords: WordToken[] = [];
 
@@ -122,12 +156,24 @@ function groupTokensIntoChunks(tokens: WordToken[], maxWords: number): WordChunk
     const token = tokens[i];
     const prev = tokens[i - 1];
 
-    const hasLongPause = prev && token.start - prev.end > 600;
+    // Natural speech pause threshold: 300ms
+    const hasLongPause = prev && token.start - prev.end > 300;
     const prevHasSentencePunctuation = prev && /[.!?]$/.test(prev.word.trim());
+
+    // Check if silence interval lies between prev and token
+    let hasSilenceBetween = false;
+    if (prev) {
+      for (const silence of silenceIntervals) {
+        if (silence.startMs >= prev.end - 50 && silence.endMs <= token.start + 50) {
+          hasSilenceBetween = true;
+          break;
+        }
+      }
+    }
 
     if (
       currentChunkWords.length >= maxWords ||
-      (currentChunkWords.length > 0 && (hasLongPause || prevHasSentencePunctuation))
+      (currentChunkWords.length > 0 && (hasLongPause || prevHasSentencePunctuation || hasSilenceBetween))
     ) {
       const chunkStart = currentChunkWords[0].start;
       const chunkEnd = currentChunkWords[currentChunkWords.length - 1].end;
