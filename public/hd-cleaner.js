@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const unsharpCheckbox = document.getElementById('cleaner-unsharp-checkbox');
   const audioNormCheckbox = document.getElementById('cleaner-audionorm-checkbox');
   const forceCpuCheckbox = document.getElementById('cleaner-forcecpu-checkbox');
+  const keepMetaCheckbox = document.getElementById('cleaner-keepmetadata-checkbox');
 
   // Monitor Card Elements
   const monitorCard = document.getElementById('cleaner-monitor-card');
@@ -100,24 +101,28 @@ document.addEventListener('DOMContentLoaded', () => {
         ditherCheckbox.checked = true;
         unsharpCheckbox.checked = true;
         audioNormCheckbox.checked = true;
+        if (keepMetaCheckbox) keepMetaCheckbox.checked = true;
       } else if (preset === 'tiktok') {
         fpsSelect.value = '60';
         resolutionSelect.value = '1080x1920';
         ditherCheckbox.checked = true;
         unsharpCheckbox.checked = true;
         audioNormCheckbox.checked = true;
+        if (keepMetaCheckbox) keepMetaCheckbox.checked = true;
       } else if (preset === 'universal') {
         fpsSelect.value = '30';
         resolutionSelect.value = '1080x1920';
         ditherCheckbox.checked = true;
         unsharpCheckbox.checked = true;
         audioNormCheckbox.checked = true;
+        if (keepMetaCheckbox) keepMetaCheckbox.checked = true;
       } else if (preset === 'metadata_only') {
         fpsSelect.value = 'source';
         resolutionSelect.value = 'original';
         ditherCheckbox.checked = false;
         unsharpCheckbox.checked = false;
         audioNormCheckbox.checked = false;
+        if (keepMetaCheckbox) keepMetaCheckbox.checked = false;
       }
     });
   });
@@ -280,6 +285,8 @@ document.addEventListener('DOMContentLoaded', () => {
       formData.append('platform', platformInput.value);
       formData.append('fps', fpsSelect.value);
       formData.append('resolution', resolutionSelect.value);
+      const shouldStrip = keepMetaCheckbox ? !keepMetaCheckbox.checked : false;
+      formData.append('stripMetadata', String(shouldStrip));
       formData.append('applyMicroDither', String(ditherCheckbox.checked));
       formData.append('applyUnsharp', String(unsharpCheckbox.checked));
       formData.append('normalizeAudio', String(audioNormCheckbox.checked));
@@ -416,10 +423,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Populate Comparison Card
     if (compMetaBefore) compMetaBefore.textContent = `${b.atomTagsCount} tags`;
-    if (compMetaAfter) compMetaAfter.textContent = '0 tags (CLEANED)';
+    if (compMetaAfter) {
+      if (a.atomTagsCount === 0) {
+        compMetaAfter.textContent = '0 tags (ANONYMIZED)';
+      } else {
+        compMetaAfter.textContent = `${a.atomTagsCount} tags (Camera Intact: ${a.cameraMakeModel || 'Verified'})`;
+      }
+    }
 
     if (compGpsBefore) compGpsBefore.textContent = b.hasGps ? '⚠️ EXPOSED' : 'None';
-    if (compGpsAfter) compGpsAfter.textContent = '✅ REMOVED';
+    if (compGpsAfter) compGpsAfter.textContent = a.hasGps ? '⚠️ EXPOSED' : '✅ CLEAN / REMOVED';
 
     if (compFpsBefore) compFpsBefore.textContent = `${b.video?.fps || '?'} FPS (${b.video?.isVfr ? 'VFR' : 'CFR'})`;
     if (compFpsAfter) compFpsAfter.textContent = `${a.video?.fps || '?'} FPS (STRICT CFR)`;

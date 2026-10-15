@@ -231,16 +231,27 @@ function runFfmpegProcess(
       args.push('-an');
     }
 
-    // 5. Total Metadata Sanitation & FastStart
-    args.push(
-      '-map_metadata', '-1',
-      '-map_chapters', '-1',
-      '-fflags', '+bitexact',
-      '-flags:v', '+bitexact',
-      '-flags:a', '+bitexact',
-      '-movflags', '+faststart',
-      outputPath
-    );
+    // 5. Metadata Handling & FastStart
+    if (options.stripMetadata !== false) {
+      // Total anonymization: strip all tags and enforce bitexact streams
+      args.push(
+        '-map_metadata', '-1',
+        '-map_chapters', '-1',
+        '-fflags', '+bitexact',
+        '-flags:v', '+bitexact',
+        '-flags:a', '+bitexact'
+      );
+    } else {
+      // Keep original camera & device metadata (crucial for TikTok original UGC trust score)
+      // Only scrub privacy location/GPS tags if present
+      args.push(
+        '-map_metadata', '0',
+        '-metadata', 'location=',
+        '-metadata', 'location-eng='
+      );
+    }
+
+    args.push('-movflags', '+faststart', outputPath);
 
     const child = spawn(ffmpegBin, args);
     let stderr = '';
